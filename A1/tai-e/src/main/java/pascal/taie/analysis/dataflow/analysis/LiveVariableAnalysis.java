@@ -25,8 +25,15 @@ package pascal.taie.analysis.dataflow.analysis;
 import pascal.taie.analysis.dataflow.fact.SetFact;
 import pascal.taie.analysis.graph.cfg.CFG;
 import pascal.taie.config.AnalysisConfig;
-import pascal.taie.ir.exp.Var;
+import pascal.taie.ir.exp.*;
+import pascal.taie.ir.stmt.Binary;
+import pascal.taie.ir.stmt.New;
 import pascal.taie.ir.stmt.Stmt;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Implementation of classic live variable analysis.
@@ -48,23 +55,72 @@ public class LiveVariableAnalysis extends
     @Override
     public SetFact<Var> newBoundaryFact(CFG<Stmt> cfg) {
         // TODO - finish me
-        return null;
+
+        return new SetFact<Var>();
+        // return new SetFact<>(cfg.getExit().getUses().stream().map(x->(Var)x).toList());
     }
 
     @Override
     public SetFact<Var> newInitialFact() {
         // TODO - finish me
-        return null;
+        return new SetFact<Var>();
     }
 
     @Override
     public void meetInto(SetFact<Var> fact, SetFact<Var> target) {
         // TODO - finish me
+
+        // 按照文档说的合并
+        target.union(fact);
     }
 
     @Override
     public boolean transferNode(Stmt stmt, SetFact<Var> in, SetFact<Var> out) {
         // TODO - finish me
-        return false;
+
+        // backward 方式
+        // 创建out临时变量 方便做前后对比
+        SetFact<Var> tmp = in.copy();
+
+        in.union(out);
+
+        // 减去def
+        in.removeIf(var -> stmt.getDef().isPresent() && var == stmt.getDef().get()); //
+
+        // 合并 use
+        for (RValue rValue : stmt.getUses()) { // 遍历
+            process(rValue, in);
+        }
+        // return tmp != in;    // wrong  一直返回true 停不下来
+        return !tmp.equals(in);
+    }
+
+    private void process(RValue value, SetFact<Var> in) {
+        if (value instanceof Var) {
+            in.add((Var) value);
+        } else if (value instanceof InvokeInstanceExp) {    // 函数调用
+            processInvokeInstanceExp((InvokeInstanceExp) value, in);
+        } else if (value instanceof BinaryExp) {            // 二元运算 获取每个Operand
+            process(((BinaryExp) value).getOperand1(), in);
+            process(((BinaryExp) value).getOperand1(), in);
+        } else if (value instanceof ArrayLengthExp) {       // The .length property of an array
+            in.add(((ArrayLengthExp) value).getBase());     // a.length()   a就是use元素
+            // in.add(((ArrayLengthExp) value).getOperand());
+        } else if (value instanceof ArrayAccess) {          // 数组访问  a[1] 或者 a[b] 所以参数可能是use元素
+            in.add(((ArrayAccess) value).getBase());
+            in.add(((ArrayAccess) value).getIndex());
+        } else {                                            // 输出没有被处理的类型
+            System.out.println(value.getClass().toString());
+        }
+
+
+    }
+
+    private void processInvokeInstanceExp(InvokeInstanceExp exp, SetFact<Var> in) {
+        // 函数调用 一般是class.function(a1,a2,...)
+        in.add(exp.getBase());                              // class名是use
+        for (RValue value : exp.getUses()) {                // 参数也是uses
+            process(value, in);
+        }
     }
 }
