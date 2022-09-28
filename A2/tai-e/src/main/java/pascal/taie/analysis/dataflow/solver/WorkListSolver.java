@@ -23,8 +23,14 @@
 package pascal.taie.analysis.dataflow.solver;
 
 import pascal.taie.analysis.dataflow.analysis.DataflowAnalysis;
+import pascal.taie.analysis.dataflow.analysis.constprop.CPFact;
 import pascal.taie.analysis.dataflow.fact.DataflowResult;
 import pascal.taie.analysis.graph.cfg.CFG;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 
 class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
 
@@ -35,6 +41,35 @@ class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
     @Override
     protected void doSolveForward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
         // TODO - finish me
+        Queue<Node> Worklist =  new LinkedList<Node>();
+        for(Node node:cfg){
+            if(node != cfg.getEntry() && node != cfg.getExit()) {
+                Worklist.add(node);
+            }
+        }
+        while(!Worklist.isEmpty()){
+            Node node = Worklist.poll();
+
+            // 这里就不能先meetInto 再 transfer了
+            // 先分开transfer 再 meetInto
+            int flag = 0;
+
+            for(Node pred:cfg.getPredsOf(node)){
+                Fact tmp = analysis.newInitialFact();
+                analysis.transferNode(node,result.getOutFact(pred),tmp);
+                flag |= analysis.meetInto(tmp,result.getOutFact(node));
+            }
+            if(flag == 1){
+                Worklist.addAll(cfg.getSuccsOf(node));
+            }
+
+//            for(Node pred:cfg.getPredsOf(node)){
+//                analysis.meetInto(result.getOutFact(pred),result.getInFact(node));
+//            }
+//            if(analysis.transferNode(node,result.getInFact(node),result.getOutFact(node))){
+//                Worklist.addAll(cfg.getSuccsOf(node));
+//            }
+        }
     }
 
     @Override

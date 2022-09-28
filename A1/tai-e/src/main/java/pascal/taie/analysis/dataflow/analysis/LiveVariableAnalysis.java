@@ -83,6 +83,7 @@ public class LiveVariableAnalysis extends
         SetFact<Var> tmp = in.copy();
 
         in.union(out);
+        // in = out.copy();
 
         // 减去def
         in.removeIf(var -> stmt.getDef().isPresent() && var == stmt.getDef().get()); //
