@@ -30,9 +30,7 @@ import pascal.taie.language.classes.JClass;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.classes.Subsignature;
 
-import java.util.ArrayDeque;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Implementation of the CHA algorithm.
@@ -48,9 +46,31 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
     }
 
     private CallGraph<Invoke, JMethod> buildCallGraph(JMethod entry) {
+        // TODO - finish me
+
         DefaultCallGraph callGraph = new DefaultCallGraph();
         callGraph.addEntryMethod(entry);
-        // TODO - finish me
+        LinkedList<JMethod> workList = new LinkedList<>();
+        workList.add(entry);
+        Set<JMethod> RM = new HashSet<>(); // Reachable method
+        while(!workList.isEmpty()){
+            JMethod m = workList.poll();
+            if(!RM.contains(m)){
+                RM.add(m);
+                System.out.println("[papaya]:[RM]"+m.toString());
+                callGraph.addReachableMethod(m); // 标记method reachable
+                for(Invoke callSite : callGraph.callSitesIn(m).toList()){
+                    System.out.println("[papaya]:[callSite]"+callSite.toString());
+                    Set<JMethod> T = resolve(callSite);
+                    if(T.isEmpty()) continue;
+                    for(JMethod mm : T){
+                        System.out.println("[papaya]:[mm]"+mm.toString());
+                        callGraph.addEdge(new Edge<>(CallGraphs.getCallKind(callSite),callSite,mm));
+                        workList.add(mm);
+                    }
+                }
+            }
+        }
         return callGraph;
     }
 
@@ -59,7 +79,40 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
      */
     private Set<JMethod> resolve(Invoke callSite) {
         // TODO - finish me
-        return null;
+
+        Set<JMethod> T = new HashSet<>();
+        JMethod m = callSite.getContainer();
+        System.out.println("[papaya]:"+"[method]"+m.toString()+"[callSite]"+callSite.toString());
+        CallKind callkind = CallGraphs.getCallKind(callSite);
+        System.out.println("[papaya]:"+callkind.toString());
+        Subsignature subsignature = callSite.getMethodRef().getSubsignature();
+        if (callkind.equals(CallKind.STATIC)) { // 注意这里添加的method获取路径有点绕 按道理来说Static和Special可以合并
+            T.add(callSite.getMethodRef().getDeclaringClass().getDeclaredMethod(subsignature));
+        } else if (callkind.equals(CallKind.SPECIAL)) {
+            JMethod tmp = dispatch(callSite.getMethodRef().getDeclaringClass(),subsignature);
+            if(tmp != null) T.add(tmp);
+        }else if(callkind.equals(CallKind.VIRTUAL)){
+            JClass c = callSite.getMethodRef().getDeclaringClass();
+            JMethod tmp = dispatch(c,subsignature);
+            if(tmp != null) T.add(tmp);
+            for(JClass cc : hierarchy.getDirectSubclassesOf(c)){ // VIRTUAL 用这个 getDirectSubclassesOf
+                System.out.println("[papaya]:"+"[getDirectSubclassesOf]"+cc.toString());
+                JMethod _tmp = dispatch(cc,subsignature);
+                if(_tmp != null) T.add(_tmp);
+            }
+        }
+        else if(callkind.equals(CallKind.INTERFACE)){   // INTERFACE 用 getDirectImplementorsOf
+                                                        // 不知道 getDirectSubinterfacesOf 有啥用
+            JClass c = callSite.getMethodRef().getDeclaringClass();
+            JMethod tmp = dispatch(c,subsignature);
+            if(tmp != null) T.add(tmp);
+            for(JClass cc : hierarchy.getDirectImplementorsOf(c)){
+                System.out.println("[papaya]:"+"[getDirectImplementorsOf]"+cc.toString());
+                JMethod _tmp = dispatch(cc,subsignature);
+                if(_tmp != null) T.add(_tmp);
+            }
+        }
+        return T;
     }
 
     /**
@@ -70,6 +123,13 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
      */
     private JMethod dispatch(JClass jclass, Subsignature subsignature) {
         // TODO - finish me
-        return null;
+        System.out.println("[papaya]:"+"[class]"+jclass.toString()+"[sign]"+subsignature.toString());
+        for (JMethod jmethod : jclass.getDeclaredMethods()) {
+            if (!jmethod.isAbstract() && jmethod.getSubsignature().equals(subsignature)) {
+                System.out.println("[papaya]:find method");
+                return jmethod;
+            }
+        }
+        return jclass.getSuperClass() != null ? dispatch(jclass.getSuperClass(), subsignature) : null;
     }
 }
