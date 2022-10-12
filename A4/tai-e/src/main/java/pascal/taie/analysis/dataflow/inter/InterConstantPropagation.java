@@ -76,15 +76,16 @@ public class InterConstantPropagation extends
     public void meetInto(CPFact fact, CPFact target) {
         cp.meetInto(fact, target);
     }
+
     /*
-    * transferCallNode 判断是否存在LValue 存在的话需要抹去 不存在的话就out=in
-    * transferNonCallNode 等同于之前的transferNode 只是这里一定没有invoke
-    * transferEdge 每条Edge可以看做一个Node(但不是) 会有in和out
-    * transferNormalEdge 恒等函数 直接返回out
-    * transferCallToReturnEdge 应该也可以做成恒等函数
-    * transferCallEdge 需要添加传参信息
-    * transferReturnEdge 直接返回 由meetInto来处理返回信息
-    * */
+     * transferCallNode 判断是否存在LValue 存在的话需要抹去 不存在的话就out=in
+     * transferNonCallNode 等同于之前的transferNode 只是这里一定没有invoke
+     * transferEdge 每条Edge可以看做一个Node(但不是) 会有in和out
+     * transferNormalEdge 恒等函数 直接返回out
+     * transferCallToReturnEdge 应该也可以做成恒等函数
+     * transferCallEdge 需要添加传参信息
+     * transferReturnEdge 直接返回 由meetInto来处理返回信息
+     * */
     @Override
     protected boolean transferCallNode(Stmt stmt, CPFact in, CPFact out) {
         // TODO - finish me
@@ -94,8 +95,8 @@ public class InterConstantPropagation extends
         for (Map.Entry<Var, Value> entry : in.entries().toList()) {
             out.update(entry.getKey(), entry.getValue());
         }
-        if(stmt.getDef().isPresent() && !out.get((Var)stmt.getDef().get()).isUndef()){
-            out.remove((Var)stmt.getDef().get());
+        if (stmt.getDef().isPresent() && !out.get((Var) stmt.getDef().get()).isUndef()) {
+            out.remove((Var) stmt.getDef().get());
         }
         return !tmp.equals(out);
     }
@@ -118,12 +119,12 @@ public class InterConstantPropagation extends
     protected CPFact transferCallToReturnEdge(CallToReturnEdge<Stmt> edge, CPFact out) {
         // TODO - finish me
 
-        if(edge.getSource().getDef().isEmpty()){
+        if (edge.getSource().getDef().isEmpty()) {
             return out.copy();
         }
         CPFact tmp = out.copy();
-        tmp.remove((Var)edge.getSource().getDef().get());
-        return out.copy();
+        tmp.remove((Var) edge.getSource().getDef().get());
+        return tmp;
     }
 
     @Override
@@ -131,29 +132,20 @@ public class InterConstantPropagation extends
         // TODO - finish me
 
         // A3 总结过:invoke调用stmt.getUses()会返回 参数 + 函数签名  如果不是staticInvoke 第一个参数就会是隐藏的this
-        System.out.println("[papaya]:transferCallEdge--edge.getSource().getUses()"+edge.getSource().getUses().toString());
+        System.out.println("[papaya]:transferCallEdge--edge.getSource().getUses()" + edge.getSource().getUses().toString());
         CPFact res = cp.newInitialFact();
 
-        InvokeExp exp = (InvokeExp) edge.getSource().getUses().get(edge.getSource().getUses().size()-1);
-        if(exp instanceof InvokeStatic) {
-            int index = 0;
-            for (Var var : icfg.getContainingMethodOf(edge.getTarget()).getIR().getParams()) {
-                if (ConstantPropagation.canHoldInt(var)) {
-                    res.update(var, callSiteOut.get(exp.getArg(index)));
-                    // var 是形参   tmp 是实参
-                }
-                index++;
+        InvokeExp exp = (InvokeExp) edge.getSource().getUses().get(edge.getSource().getUses().size() - 1);
+
+        int index = 0;
+        for (Var var : icfg.getContainingMethodOf(edge.getTarget()).getIR().getParams()) {
+            if (ConstantPropagation.canHoldInt(var)) {
+                res.update(var, callSiteOut.get(exp.getArg(index)));
+                // var 是形参   tmp 是实参
             }
-        }else { // 非静态函数都有第一个隐藏函数为this指针
-            int index = 1;
-            for (Var var : icfg.getContainingMethodOf(edge.getTarget()).getIR().getParams()) {
-                if (ConstantPropagation.canHoldInt(var)) {
-                    res.update(var,callSiteOut.get(exp.getArg(index)));
-                    // var 是形参   tmp 是实参
-                }
-                index++;
-            }
+            index++;
         }
+
 
         return res;
     }
@@ -162,21 +154,22 @@ public class InterConstantPropagation extends
     protected CPFact transferReturnEdge(ReturnEdge<Stmt> edge, CPFact returnOut) {
         // TODO - finish me
         /*
-        * 奶奶滴 一直在想怎么获得调用点滴信息 getCallSite 就行了
-        * */
+         * 奶奶滴 一直在想怎么获得调用点滴信息 getCallSite 就行了
+         * */
         Stmt callSite = edge.getCallSite();
-        if(callSite.getDef().isEmpty()){
-            return null;
-        }
         CPFact res = new CPFact();
-        if(edge.getReturnVars().toArray().length > 1){ // 多个ret 先粗处理返回NAC 如果都为相同的常量应该返回常量
-                                                        // 不想处理了。。 就这样吧 测试代码太长了
-            res.update((Var)callSite.getDef().get(),Value.getNAC());
-        } else{
-            for(Var var : edge.getReturnVars()){ // 只有一个但是不知道怎么提出来，直接用循环算了
-                res.update((Var)callSite.getDef().get(),returnOut.get(var));
+        if (callSite.getDef().isEmpty()) {
+            return res;
+        }
+        Value tmp = Value.getUndef();
+        for (Var var : edge.getReturnVars()) {
+            if(ConstantPropagation.canHoldInt(var)) {
+                tmp = cp.meetValue(tmp, returnOut.get(var)); // meetInto来合并多个retVar
             }
         }
+        res.update((Var) callSite.getDef().get(), tmp);
+
+
         return res;
     }
 }

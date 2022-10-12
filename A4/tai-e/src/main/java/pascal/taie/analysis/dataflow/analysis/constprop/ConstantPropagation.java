@@ -92,6 +92,15 @@ public class ConstantPropagation extends
      */
     public Value meetValue(Value v1, Value v2) {        // v1 v2 都不是undef
         // TODO - finish me
+        if (v1.isUndef() && v2.isUndef()) {
+            return Value.getUndef();
+        }
+        if (v1.isUndef() && !v2.isUndef()) {
+            return v2;
+        }
+        if (v2.isUndef() && !v1.isUndef()) {
+            return v1;
+        }
 
         if (v1.isNAC() || v2.isNAC()) {                   // 其中有NAC 结果就是NAC
             return Value.getNAC();
@@ -114,7 +123,7 @@ public class ConstantPropagation extends
         for (Map.Entry<Var, Value> entry : in.entries().toList()) {
             out.update(entry.getKey(), entry.getValue());
         }
-        System.out.println("[papaya]:stmt----"+stmt.toString());
+        System.out.println("[papaya]:stmt----" + stmt.toString());
         if (!(stmt instanceof DefinitionStmt)) return !tmp.equals(out);         // 判断是否赋值语句
         if (stmt.getDef().isEmpty() || !(stmt.getDef().get() instanceof Var)) return !tmp.equals(out);
         if (!canHoldInt((Var) stmt.getDef().get())) return !tmp.equals(out);    // 判断是否是int类型
@@ -135,11 +144,10 @@ public class ConstantPropagation extends
                 && !stmt.getUses().get(2).toString().contains("invoke")) {
             process(pair_x, flag, x, stmt.getUses().get(2), out); // 只取最后一个  也就是 BinaryExp
             // 需要考虑 x = x + 1 情况
-        } else if(stmt.getUses().size() == 1) { // 只处理 x = y
+        } else if (stmt.getUses().size() == 1) { // 只处理 x = y
             process(pair_x, flag, x, stmt.getUses().get(0), out); // 此外就是 x = y的情况
-        }
-        else{ // 剩下的肯定是invoke调用 这里处理为NAC
-            out.update(x,Value.getNAC());
+        } else { // 剩下的肯定是invoke调用 这里处理为NAC
+            out.update(x, Value.getNAC());
         }
 //        for (RValue rValue : stmt.getUses()) { // 不能采用遍历
 //            process(pair_x,flag, x, rValue, out); // 需要考虑 x = NAC && x = x + 1 情况
@@ -147,7 +155,7 @@ public class ConstantPropagation extends
 
 
 //        System.out.println("[papaya]:" + stmt.getUses().size());
-        if(stmt.getUses().size() >= 2){
+        if (stmt.getUses().size() >= 2) {
             System.out.println("[papaya]:" + stmt.getUses());
         }
 //        System.out.println("[papaya]:" + stmt.getDef().toString() + " = " + stmt.getUses());
@@ -166,7 +174,7 @@ public class ConstantPropagation extends
             if (flag && // 被删除过 并且 是 x = x op y的情况 需要将x加回来
                     (((BinaryExp) rvalue).getOperand1().equals(pair_x.getO1())
                             || ((BinaryExp) rvalue).getOperand2().equals(pair_x.getO1()))) {
-                out.update(pair_x.getO1(),pair_x.getO2());
+                out.update(pair_x.getO1(), pair_x.getO2());
             }
 
             if (!canHoldInt(((BinaryExp) rvalue).getOperand1()) // 考虑等式右边有 非Int 但是感觉不会出现这种复杂情况

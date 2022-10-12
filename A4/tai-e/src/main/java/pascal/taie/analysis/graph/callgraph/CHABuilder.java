@@ -91,27 +91,26 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
         } else if (callkind.equals(CallKind.SPECIAL)) {
             JMethod tmp = dispatch(callSite.getMethodRef().getDeclaringClass(),subsignature);
             if(tmp != null) T.add(tmp);
-        }else if(callkind.equals(CallKind.VIRTUAL)){
-            JClass c = callSite.getMethodRef().getDeclaringClass();
-            JMethod tmp = dispatch(c,subsignature);
-            if(tmp != null) T.add(tmp);
-            for(JClass cc : hierarchy.getDirectSubclassesOf(c)){ // VIRTUAL 用这个 getDirectSubclassesOf
-                System.out.println("[papaya]:"+"[getDirectSubclassesOf]"+cc.toString());
-                JMethod _tmp = dispatch(cc,subsignature);
-                if(_tmp != null) T.add(_tmp);
+        }else if(callkind.equals(CallKind.VIRTUAL) || callkind.equals(CallKind.INTERFACE)){
+            Stack<JClass> toProcess = new Stack<>();
+            toProcess.push(callSite.getMethodRef().getDeclaringClass());
+            while (!toProcess.isEmpty()) {
+                JClass currentClass = toProcess.pop();
+                T.add(dispatch(currentClass, subsignature));
+                for (JClass childClass : hierarchy.getDirectSubclassesOf(currentClass)) {
+                    toProcess.push(childClass);
+                }
+                if(currentClass.isInterface()) {
+                    for (JClass childClass : hierarchy.getDirectSubinterfacesOf(currentClass)) {
+                        toProcess.push(childClass);
+                    }
+                    for (JClass childClass : hierarchy.getDirectImplementorsOf(currentClass)) {
+                        toProcess.push(childClass);
+                    }
+                }
             }
         }
-        else if(callkind.equals(CallKind.INTERFACE)){   // INTERFACE 用 getDirectImplementorsOf
-                                                        // 不知道 getDirectSubinterfacesOf 有啥用
-            JClass c = callSite.getMethodRef().getDeclaringClass();
-            JMethod tmp = dispatch(c,subsignature);
-            if(tmp != null) T.add(tmp);
-            for(JClass cc : hierarchy.getDirectImplementorsOf(c)){
-                System.out.println("[papaya]:"+"[getDirectImplementorsOf]"+cc.toString());
-                JMethod _tmp = dispatch(cc,subsignature);
-                if(_tmp != null) T.add(_tmp);
-            }
-        }
+        T.remove(null);
         return T;
     }
 
